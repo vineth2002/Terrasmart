@@ -1,0 +1,212 @@
+!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Plant Monitoring Dashboard</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #2196F3;
+            --background-color: #f0f4f8;
+            --card-background: #ffffff;
+            --text-color: #333333;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        .header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: fixed;
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            /* align-items: center; */
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .datetime {
+            font-size: 14px;
+            margin-top: 5px;
+            font-weight: bold;
+            margin-right: 30px; 
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 100px 20px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background-color: var(--card-background);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card h2 {
+            color: var(--primary-color);
+            font-size: 18px;
+            margin-top: 0;
+        }
+        .sensor-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+        .graph {
+            grid-column: span 2;
+        }
+        iframe {
+            width: 100%;
+            height: 300px;
+            border: none;
+            border-radius: 10px;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            .graph {
+                grid-column: span 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>TERRASMART</h1>
+        <div class="datetime" id="datetime"></div>
+    </div>
+    <div class="container">
+        <div class="card" id="temperature">
+            <h2>Temperature</h2>
+            <p class="sensor-value" id="temp">Loading...</p>
+        </div>
+        <div class="card" id="soil-moisture">
+            <h2>Soil Moisture</h2>
+            <p class="sensor-value" id="soilMoisture">Loading...</p>
+        </div>
+        <div class="card" id="last-watered">
+            <h2>Last Watering Time</h2>
+            <p class="sensor-value" id="lastWateringTime">Loading...</p>
+        </div>
+        <div class="card" id="water-level">
+            <h2>Water Level Status</h2>
+            <p class="sensor-value" id="WaterLevel">Loading...</p>
+        </div>
+
+        <div class="card graph" id="thingspeak-1">
+            <h2>Soil Moisture Graph</h2>
+            <iframe src="https://thingspeak.com/channels/2583019/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15"></iframe>
+        </div>
+        <div class="card graph" id="thingspeak-2">
+            <h2>Temperature Graph</h2>
+            <iframe src="https://thingspeak.com/channels/2583019/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line"></iframe>
+        </div>
+        <div class="card" id="fertilizer-level">
+            <h2>Fertilizer Level Status</h2>
+            <p class="sensor-value" id="FertilizerLevel">Loading...</p>
+        </div>
+        <div class="card">
+            <h2>LED Control</h2>
+            <button id="ledButton" onclick="toggleLED()">LED OFF</button>
+        </div>
+  
+        <div class="card">
+            <h2>Fertilizer Pump</h2>
+            <button id="fertilizerButton" onclick="ActiveFertilizer()">OFF</button>
+        </div>
+        <div class="card">
+            <h2>Water Pump</h2>
+            <button id="waterButton" onclick="ActiveWater()">OFF</button>
+        </div>
+    </div>
+    <script>
+        let ledState = false;
+
+        async function fetchData() {
+            const response = await fetch('/data');
+            const data = await response.json();
+            document.getElementById('temp').innerText = data.temperature + ' °C';
+            document.getElementById('soilMoisture').innerText = data.soilMoisture + ' %';
+            document.getElementById('lastWateringTime').innerText = data.WateringMonth+'/'+data.WateringDay+' , '+data.WateringTimeHour + ':' + data.WateringTimeMin;
+            document.getElementById('WaterLevel').innerText = data.waterLevelLow ;
+            document.getElementById('FertilizerLevel').innerText = data.fertilizerLevelLow ;
+            ledState = data.ledState;
+            updateLEDButton();
+            fertilizerActivated=data.fertilizerActivated;
+            updateFertilizerButton();
+
+        }
+
+        async function toggleLED() {
+            const response = await fetch('/toggleLED');
+            const newState = await response.text();
+            ledState = newState.trim() === "LED is ON";
+            updateLEDButton();
+
+        }
+
+        function updateLEDButton() {
+            const button = document.getElementById('ledButton');
+            button.textContent = ledState ? "LED ON" : "LED OFF";
+        }
+
+        async function ActiveFertilizer(){
+          const response=await fetch('/ActiveFertilizer');
+          const newState=await response.text();
+          fertilizerActivated=newState.trim()==="Fertilizer Pump ON";
+          updateFertilizerButton();
+        }
+
+        function updateFertilizerButton() {
+          const button = document.getElementById('fertilizerButton');
+          button.textContent = fertilizerActivated ? "ON" : "OFF";
+        }
+        
+        function updateDateTime() {
+            const now = new Date();
+            const dateTimeString = now.toLocaleString();
+            document.getElementById('datetime').innerText = dateTimeString;
+        }
+
+        fetchData();
+        setInterval(fetchData, 20000);
+        setInterval(updateDateTime, 1000);
+        updateDateTime();
+    </script>
+</body>
+</html>
